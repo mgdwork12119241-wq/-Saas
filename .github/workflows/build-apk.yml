@@ -1,0 +1,99 @@
+name: Build APK Release
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'client/**'
+      - 'package.json'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '22'
+        cache: 'pnpm'
+    
+    - name: Install pnpm
+      run: npm install -g pnpm
+    
+    - name: Install dependencies
+      run: pnpm install
+    
+    - name: Build web app
+      run: pnpm run build
+    
+    - name: Setup Cordova
+      run: |
+        npm install -g cordova
+        npm install -g cordova-res
+    
+    - name: Create Cordova project
+      run: |
+        mkdir -p cordova-app
+        cd cordova-app
+        cordova create . com.neuroread.pro "NeuroRead Pro"
+    
+    - name: Copy web files
+      run: |
+        cp -r dist/public/* cordova-app/www/
+    
+    - name: Add Android platform
+      run: |
+        cd cordova-app
+        cordova platform add android@latest
+    
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+      with:
+        api-level: 34
+        build-tools-version: '34.0.0'
+    
+    - name: Build APK
+      run: |
+        cd cordova-app
+        cordova build android --release
+    
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ github.run_number }}
+        release_name: NeuroRead Pro v${{ github.run_number }}
+        body: |
+          ## NeuroRead Pro - نظام القراءة العصبية المتقدم
+          
+          تطبيق ذكاء اصطناعي متقدم لتحليل الأنماط السلوكية والبيومترية
+          
+          ### المميزات:
+          - تحليل تعابير الوجه والمشاعر
+          - تحليل الصوت والطاقة الصوتية
+          - تتبع حركة العين
+          - معالجة محلية 100% - لا توجد بيانات ترسل للخوادم
+          - واجهة دردشة ذكية
+          - تمارين تفاعلية
+          
+          ### التحميل:
+          - **ملف APK**: تم إرفاق الملف أدناه
+          - **الويب**: https://mgdwork12119241-wq.github.io/-Saas/
+        draft: false
+        prerelease: false
+    
+    - name: Upload APK to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./cordova-app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
+        asset_name: NeuroRead-Pro-v${{ github.run_number }}.apk
+        asset_content_type: application/vnd.android.package-archive
